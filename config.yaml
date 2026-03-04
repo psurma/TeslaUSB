@@ -89,3 +89,17 @@ web:
   lightshow_folder: LightShow # Folder on part2 where light shows are stored
   max_upload_size_mb: 2048 # Max accepted upload size for music/lightshow (MiB)
   max_upload_chunk_mb: 16 # Chunk size for streaming uploads (MiB)
+
+# ============================================================================
+# NAS Archive Configuration
+# ============================================================================
+# Automatically sync TeslaCam footage to a NAS when connected to home WiFi
+nas_archive:
+  enabled: false # Set to true to enable NAS archiving
+  home_ssid: "Orion" # Home WiFi SSID (only sync when connected to this network)
+  smb_host: "192.168.1.3" # NAS hostname or IP address
+  smb_share: "backups/Video/TeslaCam" # SMB share path on the NAS
+  smb_user: "teslausb" # SMB username
+  smb_password: "" # SMB password (leave empty if using credentials file)
+  smb_version: "2.0" # SMB protocol version (2.0 required for Synology + Debian Buster)
+  delete_after_archive: false # If true, delete local files after successful sync

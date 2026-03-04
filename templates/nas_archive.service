@@ -1,0 +1,22 @@
+[Unit]
+Description=TeslaUSB NAS Archive
+After=network-online.target present_usb_on_boot.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=__GADGET_DIR__/scripts/nas_archive.sh
+User=root
+StandardOutput=journal
+StandardError=journal
+RuntimeDirectory=teslausb
+RuntimeDirectoryMode=0755
+
+# Nice level - run at lower priority to avoid impacting USB gadget
+Nice=10
+
+# Memory limits - rsync can be memory hungry on large datasets
+MemoryMax=150M
+
+# Don't restart on failure - the timer will retry
+Restart=no

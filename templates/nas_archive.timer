@@ -1,0 +1,14 @@
+[Unit]
+Description=TeslaUSB NAS Archive Timer
+Requires=nas_archive.service
+
+[Timer]
+# Run 2 minutes after boot (give network time to settle)
+OnBootSec=2min
+# Then every 5 minutes
+OnUnitActiveSec=5min
+# Run if system was off during scheduled time
+Persistent=true
+
+[Install]
+WantedBy=timers.target

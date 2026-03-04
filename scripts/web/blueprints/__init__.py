@@ -11,6 +11,7 @@ from .api import api_bp
 from .fsck import fsck_bp
 from .music import music_bp
 from .captive_portal import captive_portal_bp, catch_all_redirect
+from .archive import archive_bp
 
 __all__ = [
     'mode_control_bp',
@@ -24,5 +25,6 @@ __all__ = [
     'fsck_bp',
     'music_bp',
     'captive_portal_bp',
-    'catch_all_redirect'
+    'catch_all_redirect',
+    'archive_bp',
 ]

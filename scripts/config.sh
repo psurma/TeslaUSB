@@ -70,7 +70,15 @@ eval "$(yq -r '
   "OFFLINE_AP_VIRTUAL_IF=\"" + .offline_ap.virtual_interface + "\"",
   "OFFLINE_AP_FORCE_MODE=\"" + .offline_ap.force_mode + "\"",
   "CONFIG_FILE=\"" + .system.config_file + "\"",
-  "SMB_CONF=\"" + .system.samba_conf + "\""
+  "SMB_CONF=\"" + .system.samba_conf + "\"",
+  "NAS_ARCHIVE_ENABLED=\"" + (.nas_archive.enabled | tostring) + "\"",
+  "NAS_ARCHIVE_HOME_SSID=\"" + .nas_archive.home_ssid + "\"",
+  "NAS_ARCHIVE_SMB_HOST=\"" + .nas_archive.smb_host + "\"",
+  "NAS_ARCHIVE_SMB_SHARE=\"" + .nas_archive.smb_share + "\"",
+  "NAS_ARCHIVE_SMB_USER=\"" + .nas_archive.smb_user + "\"",
+  "NAS_ARCHIVE_SMB_PASSWORD=\"" + .nas_archive.smb_password + "\"",
+  "NAS_ARCHIVE_SMB_VERSION=\"" + .nas_archive.smb_version + "\"",
+  "NAS_ARCHIVE_DELETE_AFTER=\"" + (.nas_archive.delete_after_archive | tostring) + "\""
 ' "$CONFIG_YAML")"
 
 # ============================================================================

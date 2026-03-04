@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/archive.css') }}">
+<div class="container">
+    <h2>NAS Archive</h2>
+    <p class="section-description">Automatically sync TeslaCam footage to your NAS when connected to home WiFi.</p>
+
+    <!-- Status Banner -->
+    <div id="archive-status-banner">
+        {% if not archive.config.enabled %}
+        <div class="alert alert-warning">
+            <strong>NAS archiving is disabled.</strong>
+            Enable it by setting <code>nas_archive.enabled: true</code> in <code>config.yaml</code>.
+        </div>
+        {% elif archive.status == 'ok' %}
+        <div class="alert alert-success">
+            <strong>Last sync successful.</strong>
+            {{ archive.files_synced }} file(s) transferred.
+        </div>
+        {% elif archive.status == 'error' %}
+        <div class="alert alert-critical">
+            <strong>Last sync failed.</strong>
+            {{ archive.last_error or archive.message }}
+        </div>
+        {% elif archive.status == 'not_home' %}
+        <div class="alert alert-warning">
+            <strong>Not on home WiFi.</strong>
+            Archiving only runs when connected to <em>{{ archive.config.home_ssid }}</em>.
+        </div>
+        {% elif archive.status == 'skipped' %}
+        <div class="alert alert-info">
+            <strong>Sync skipped.</strong>
+            {{ archive.message }}
+        </div>
+        {% elif archive.status == 'disabled' %}
+        <div class="alert alert-warning">
+            <strong>NAS archiving is disabled.</strong>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <strong>No archive run yet.</strong>
+            Syncs run every 5 minutes when on home WiFi.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Status Details Card -->
+    <div class="settings-card">
+        <h3>Archive Status</h3>
+        <table class="info-table">
+            <tr>
+                <td class="label">Enabled</td>
+                <td>
+                    {% if archive.config.enabled %}
+                    <span class="status-badge status-present">Yes</span>
+                    {% else %}
+                    <span class="status-badge status-edit">No</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td class="label">Home WiFi</td>
+                <td>{{ archive.config.home_ssid or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="label">NAS Host</td>
+                <td>{{ archive.config.smb_host or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="label">Share</td>
+                <td>{{ archive.config.smb_share or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="label">SMB User</td>
+                <td>{{ archive.config.smb_user or '—' }}</td>
+            </tr>
+            <tr>
+                <td class="label">SMB Version</td>
+                <td>{{ archive.config.smb_version or '2.0' }}</td>
+            </tr>
+            <tr>
+                <td class="label">Delete After Archive</td>
+                <td>{{ 'Yes' if archive.config.delete_after_archive else 'No' }}</td>
+            </tr>
+            <tr>
+                <td class="label">Last Sync</td>
+                <td id="last-sync-time">{{ archive.last_sync or 'Never' }}</td>
+            </tr>
+            <tr>
+                <td class="label">Files Synced (last run)</td>
+                <td id="files-synced">{{ archive.files_synced }}</td>
+            </tr>
+            {% if archive.last_error %}
+            <tr>
+                <td class="label">Last Error</td>
+                <td class="error-text">{{ archive.last_error }}</td>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- Actions -->
+    {% if archive.config.enabled %}
+    <div class="settings-card">
+        <h3>Actions</h3>
+        <div class="action-row">
+            <button id="sync-btn" class="btn btn-primary" onclick="triggerSync()">
+                Sync Now
+            </button>
+            <button id="test-btn" class="btn btn-secondary" onclick="testConnection()">
+                Test Connection
+            </button>
+        </div>
+        <div id="action-result" class="action-result" style="display:none;"></div>
+    </div>
+    {% endif %}
+
+    <!-- Timer Info -->
+    <div class="settings-card">
+        <h3>Schedule</h3>
+        <p>
+            The archive timer runs <strong>2 minutes after boot</strong>, then every <strong>5 minutes</strong>.
+            Syncs only happen when:
+        </p>
+        <ul>
+            <li>NAS archiving is enabled in config.yaml</li>
+            <li>Connected to home WiFi (<em>{{ archive.config.home_ssid or '(not set)' }}</em>)</li>
+            <li>USB is in present mode (serving to Tesla)</li>
+            <li>TeslaCam drive is mounted</li>
+        </ul>
+        <p>
+            Check timer status via SSH:
+            <code>systemctl status nas_archive.timer</code>
+        </p>
+    </div>
+</div>
+
+<script>
+function triggerSync() {
+    const btn = document.getElementById('sync-btn');
+    const result = document.getElementById('action-result');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
+    result.style.display = 'none';
+
+    fetch('/archive/sync', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            result.style.display = 'block';
+            if (data.started) {
+                result.className = 'action-result success';
+                result.textContent = 'Sync started in background. Refresh in a moment to see results.';
+            } else {
+                result.className = 'action-result error';
+                result.textContent = 'Failed to start sync: ' + (data.error || 'unknown error');
+            }
+        })
+        .catch(err => {
+            result.style.display = 'block';
+            result.className = 'action-result error';
+            result.textContent = 'Request failed: ' + err;
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'Sync Now';
+        });
+}
+
+function testConnection() {
+    const btn = document.getElementById('test-btn');
+    const result = document.getElementById('action-result');
+    btn.disabled = true;
+    btn.textContent = 'Testing...';
+    result.style.display = 'none';
+
+    fetch('/archive/test')
+        .then(r => r.json())
+        .then(data => {
+            result.style.display = 'block';
+            if (data.reachable) {
+                result.className = 'action-result success';
+                result.textContent = 'NAS connection successful.';
+            } else {
+                result.className = 'action-result error';
+                result.textContent = 'NAS unreachable: ' + (data.error || 'unknown error');
+            }
+        })
+        .catch(err => {
+            result.style.display = 'block';
+            result.className = 'action-result error';
+            result.textContent = 'Request failed: ' + err;
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'Test Connection';
+        });
+}
+</script>
+{% endblock %}

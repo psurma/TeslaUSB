@@ -1,0 +1,203 @@
+/* Archive Page Styling */
+
+.section-description {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+/* Settings / info card */
+.settings-card {
+    background: var(--bg-container);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px 25px;
+    margin: 20px 0;
+}
+
+.settings-card h3 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+    font-size: 1.1em;
+}
+
+/* Info table inside a settings card */
+.info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.info-table tr + tr td {
+    border-top: 1px solid var(--border-color);
+}
+
+.info-table td {
+    padding: 8px 0;
+    color: var(--text-primary);
+    vertical-align: top;
+}
+
+.info-table td.label {
+    font-weight: 600;
+    color: var(--text-secondary);
+    width: 45%;
+    padding-right: 16px;
+}
+
+.info-table code {
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 0.9em;
+}
+
+/* Action row */
+.action-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Action result feedback */
+.action-result {
+    margin-top: 12px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 0.95em;
+}
+
+.action-result.success {
+    background: #E8F5E9;
+    border-left: 4px solid #4CAF50;
+    color: #2E7D32;
+}
+
+.action-result.error {
+    background: #FFEBEE;
+    border-left: 4px solid #F44336;
+    color: #C62828;
+}
+
+.error-text {
+    color: #C62828;
+    font-size: 0.9em;
+}
+
+/* Alert boxes (reused from cleanup.css pattern) */
+.alert {
+    padding: 15px 20px;
+    margin: 20px 0;
+    border-radius: 8px;
+    border-left: 4px solid;
+}
+
+.alert-success {
+    background: #E8F5E9;
+    border-color: #4CAF50;
+    color: #2E7D32;
+}
+
+.alert-warning {
+    background: #FFF3E0;
+    border-color: #FF9800;
+    color: #E65100;
+}
+
+.alert-critical {
+    background: #FFEBEE;
+    border-color: #F44336;
+    color: #C62828;
+}
+
+.alert-info {
+    background: #E3F2FD;
+    border-color: #2196F3;
+    color: #1565C0;
+}
+
+/* Dark mode overrides */
+[data-theme="dark"] .settings-card {
+    background: var(--bg-container);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .action-result.success {
+    background: #1a4d2e;
+    color: #3fb950;
+}
+
+[data-theme="dark"] .action-result.error {
+    background: #4d1a1a;
+    color: #ff6b6b;
+}
+
+[data-theme="dark"] .error-text {
+    color: #ff6b6b;
+}
+
+[data-theme="dark"] .alert-success {
+    background: #1a4d2e;
+    border-color: #3fb950;
+    color: #3fb950;
+}
+
+[data-theme="dark"] .alert-warning {
+    background: #4d3000;
+    border-color: #FF9800;
+    color: #FF9800;
+}
+
+[data-theme="dark"] .alert-critical {
+    background: #4d1a1a;
+    border-color: #F44336;
+    color: #ff6b6b;
+}
+
+[data-theme="dark"] .alert-info {
+    background: #1a3c5a;
+    border-color: #2196F3;
+    color: #58a6ff;
+}
+
+/* Btn classes (duplicated from cleanup.css for self-contained use) */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: #4CAF50;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #388E3C;
+}
+
+.btn-primary:disabled {
+    background: #9E9E9E;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background: var(--border-color);
+}
+
+.btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}

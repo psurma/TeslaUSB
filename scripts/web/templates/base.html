@@ -39,6 +39,7 @@
                 {% if music_available %}<a href="{{ url_for('music.music_home') }}" {% if page == 'music' %}class="active"{% endif %}>Music</a>{% endif %}
                 {% if shows_available %}<a href="{{ url_for('light_shows.light_shows') }}" {% if page == 'shows' %}class="active"{% endif %}>Light Shows</a>{% endif %}
                 {% if wraps_available %}<a href="{{ url_for('wraps.wraps') }}" {% if page == 'wraps' %}class="active"{% endif %}>Wraps</a>{% endif %}
+                <a href="{{ url_for('archive.archive_status') }}" {% if page == 'archive' %}class="active"{% endif %}>Archive</a>
                 <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
                     <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
                 </button>
@@ -59,6 +60,7 @@
         {% if music_available %}<a href="{{ url_for('music.music_home') }}" {% if page == 'music' %}class="active"{% endif %}>Music</a>{% endif %}
         {% if shows_available %}<a href="{{ url_for('light_shows.light_shows') }}" {% if page == 'shows' %}class="active"{% endif %}>Light Shows</a>{% endif %}
         {% if wraps_available %}<a href="{{ url_for('wraps.wraps') }}" {% if page == 'wraps' %}class="active"{% endif %}>Wraps</a>{% endif %}
+        <a href="{{ url_for('archive.archive_status') }}" {% if page == 'archive' %}class="active"{% endif %}>Archive</a>
         <div class="mobile-theme-toggle">
             <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
                 <i class="bi bi-moon-stars-fill" id="theme-icon-mobile"></i>

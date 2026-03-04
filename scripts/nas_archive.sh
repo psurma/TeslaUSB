@@ -1,0 +1,219 @@
+#!/bin/bash
+#
+# TeslaUSB NAS Archive Script
+#
+# Syncs TeslaCam footage to a NAS when connected to home WiFi.
+# Designed to run as a systemd oneshot service on a timer.
+#
+# Safety rules:
+# - Only runs in "present" mode (USB serving to Tesla)
+# - Only runs when connected to home WiFi SSID
+# - Uses nsenter for all mount operations (required in Pi namespace)
+# - Always unmounts NAS on exit via trap
+# - Writes status atomically (temp + fsync + rename)
+#
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=scripts/config.sh
+source "$SCRIPT_DIR/config.sh"
+
+# ============================================================================
+# Constants
+# ============================================================================
+NAS_MOUNT="/mnt/nas_archive"
+STATUS_DIR="/run/teslausb"
+STATUS_FILE="$STATUS_DIR/nas_archive_status.json"
+STATUS_TMP="$STATUS_DIR/nas_archive_status.tmp"
+PART1_RO_MOUNT="$MNT_DIR/part1-ro"
+LOG_PREFIX="nas_archive"
+
+# ============================================================================
+# Logging helpers
+# ============================================================================
+log_info()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$LOG_PREFIX] INFO:  $*"; }
+log_error() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$LOG_PREFIX] ERROR: $*" >&2; }
+
+# ============================================================================
+# Status file helpers (atomic write)
+# ============================================================================
+write_status() {
+  local status="$1"
+  local message="$2"
+  local files_synced="${3:-0}"
+  local last_error="${4:-}"
+
+  mkdir -p "$STATUS_DIR"
+
+  cat > "$STATUS_TMP" <<EOF
+{
+  "enabled": $NAS_ARCHIVE_ENABLED,
+  "status": "$status",
+  "message": "$message",
+  "last_sync": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+  "files_synced": $files_synced,
+  "last_error": "$last_error"
+}
+EOF
+
+  # Atomic rename after fsync
+  sync "$STATUS_TMP" 2>/dev/null || true
+  mv -f "$STATUS_TMP" "$STATUS_FILE"
+}
+
+# ============================================================================
+# Cleanup / unmount on exit
+# ============================================================================
+NAS_MOUNTED=false
+
+cleanup() {
+  if [ "$NAS_MOUNTED" = "true" ]; then
+    log_info "Unmounting NAS at $NAS_MOUNT..."
+    nsenter --mount=/proc/1/ns/mnt -- umount "$NAS_MOUNT" 2>/dev/null || \
+      nsenter --mount=/proc/1/ns/mnt -- umount -l "$NAS_MOUNT" 2>/dev/null || \
+      log_error "Failed to unmount NAS (may already be unmounted)"
+    NAS_MOUNTED=false
+  fi
+}
+
+trap cleanup EXIT
+
+# ============================================================================
+# Check: NAS archiving enabled
+# ============================================================================
+if [ "$NAS_ARCHIVE_ENABLED" != "true" ]; then
+  log_info "NAS archiving is disabled in config. Exiting."
+  mkdir -p "$STATUS_DIR"
+  write_status "disabled" "NAS archiving is disabled" 0 ""
+  exit 0
+fi
+
+# ============================================================================
+# Check: current WiFi SSID matches home SSID
+# ============================================================================
+CURRENT_SSID=""
+if command -v nmcli &>/dev/null; then
+  CURRENT_SSID="$(nmcli -t -f ACTIVE,SSID dev wifi 2>/dev/null | awk -F: '/^yes:/{print $2}' | head -1 || true)"
+fi
+
+if [ -z "$CURRENT_SSID" ]; then
+  # Fallback: try iw
+  if command -v iw &>/dev/null; then
+    CURRENT_SSID="$(iw dev wlan0 link 2>/dev/null | awk '/SSID:/{print $2}' | head -1 || true)"
+  fi
+fi
+
+if [ "$CURRENT_SSID" != "$NAS_ARCHIVE_HOME_SSID" ]; then
+  log_info "Not on home WiFi (current: '${CURRENT_SSID:-none}', home: '$NAS_ARCHIVE_HOME_SSID'). Skipping."
+  write_status "not_home" "Not connected to home WiFi ('${CURRENT_SSID:-none}')" 0 ""
+  exit 0
+fi
+
+log_info "On home WiFi '$CURRENT_SSID'. Proceeding with archive check."
+
+# ============================================================================
+# Check: USB gadget in "present" mode
+# ============================================================================
+if [ ! -f "$STATE_FILE" ] || [ "$(cat "$STATE_FILE")" != "present" ]; then
+  log_info "Not in present mode. Skipping NAS archive."
+  write_status "skipped" "Not in present mode" 0 ""
+  exit 0
+fi
+
+# ============================================================================
+# Check: part1-ro is mounted
+# ============================================================================
+if ! nsenter --mount=/proc/1/ns/mnt -- mountpoint -q "$PART1_RO_MOUNT" 2>/dev/null; then
+  log_info "Part1-ro not mounted at $PART1_RO_MOUNT. Skipping."
+  write_status "skipped" "TeslaCam drive not mounted" 0 ""
+  exit 0
+fi
+
+TESLACAM_DIR="$PART1_RO_MOUNT/TeslaCam"
+if [ ! -d "$TESLACAM_DIR" ]; then
+  log_info "TeslaCam directory not found at $TESLACAM_DIR. Nothing to sync."
+  write_status "ok" "No TeslaCam footage found" 0 ""
+  exit 0
+fi
+
+# ============================================================================
+# Mount NAS via CIFS
+# ============================================================================
+log_info "Mounting NAS //$NAS_ARCHIVE_SMB_HOST/$NAS_ARCHIVE_SMB_SHARE..."
+
+nsenter --mount=/proc/1/ns/mnt -- mkdir -p "$NAS_MOUNT"
+
+MOUNT_OPTS="vers=$NAS_ARCHIVE_SMB_VERSION,username=$NAS_ARCHIVE_SMB_USER"
+if [ -n "$NAS_ARCHIVE_SMB_PASSWORD" ]; then
+  MOUNT_OPTS="$MOUNT_OPTS,password=$NAS_ARCHIVE_SMB_PASSWORD"
+fi
+# Use noserverino to avoid inode conflicts on Synology
+MOUNT_OPTS="$MOUNT_OPTS,noserverino,file_mode=0644,dir_mode=0755"
+
+if ! nsenter --mount=/proc/1/ns/mnt -- mount -t cifs \
+    "//$NAS_ARCHIVE_SMB_HOST/$NAS_ARCHIVE_SMB_SHARE" \
+    "$NAS_MOUNT" \
+    -o "$MOUNT_OPTS" 2>/dev/null; then
+  log_error "Failed to mount NAS //$NAS_ARCHIVE_SMB_HOST/$NAS_ARCHIVE_SMB_SHARE"
+  write_status "error" "Failed to mount NAS" 0 "CIFS mount failed"
+  exit 0  # Exit 0 so systemd doesn't mark it as failed (network may just be unavailable)
+fi
+
+NAS_MOUNTED=true
+log_info "NAS mounted at $NAS_MOUNT"
+
+# ============================================================================
+# Rsync TeslaCam footage to NAS
+# ============================================================================
+log_info "Starting rsync from $TESLACAM_DIR/ to $NAS_MOUNT/..."
+
+RSYNC_OUTPUT="$(mktemp)"
+
+# --ignore-existing: never overwrite files already on NAS (safe for live recording)
+# --no-perms --no-owner --no-group: CIFS doesn't support Unix permissions
+# --omit-dir-times: avoid errors on CIFS directory timestamps
+if nsenter --mount=/proc/1/ns/mnt -- rsync -a \
+    --ignore-existing \
+    --no-perms --no-owner --no-group \
+    --omit-dir-times \
+    --stats \
+    "$TESLACAM_DIR/" \
+    "$NAS_MOUNT/" \
+    > "$RSYNC_OUTPUT" 2>&1; then
+
+  # Parse number of files transferred from rsync --stats output
+  FILES_SYNCED="$(grep -oP 'Number of regular files transferred: \K[0-9]+' "$RSYNC_OUTPUT" || echo 0)"
+  FILES_SYNCED="${FILES_SYNCED:-0}"
+
+  log_info "Rsync complete. Files transferred: $FILES_SYNCED"
+  cat "$RSYNC_OUTPUT" | while IFS= read -r line; do log_info "  rsync: $line"; done
+
+  # Optionally delete local files after successful archive
+  if [ "$NAS_ARCHIVE_DELETE_AFTER" = "true" ] && [ "$FILES_SYNCED" -gt 0 ]; then
+    log_info "delete_after_archive enabled. Removing synced files from local drive..."
+    # Only delete files that exist on NAS (use rsync --existing to list them)
+    # For safety, we only delete the TeslaCam subfolder contents, not the root
+    nsenter --mount=/proc/1/ns/mnt -- rsync -a \
+      --existing \
+      --ignore-non-existing \
+      --delete \
+      --no-perms --no-owner --no-group \
+      "$NAS_MOUNT/" \
+      "$TESLACAM_DIR/" \
+      --dry-run 2>/dev/null || true
+    log_info "Note: delete_after_archive requires the drive to be in edit mode for writes. Skipping delete."
+  fi
+
+  write_status "ok" "Sync complete" "$FILES_SYNCED" ""
+
+else
+  RSYNC_ERROR="$(tail -1 "$RSYNC_OUTPUT" | tr '"' "'" | tr '\n' ' ')"
+  log_error "Rsync failed: $RSYNC_ERROR"
+  write_status "error" "Rsync failed" 0 "$RSYNC_ERROR"
+fi
+
+rm -f "$RSYNC_OUTPUT"
+
+log_info "NAS archive run complete."

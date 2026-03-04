@@ -1426,8 +1426,16 @@ configure_service "$TEMPLATES_DIR/wifi-monitor.service" "$WIFI_MONITOR_SERVICE"
 NETWORK_OPT_SERVICE="/etc/systemd/system/network-optimizations.service"
 configure_service "$TEMPLATES_DIR/network-optimizations.service" "$NETWORK_OPT_SERVICE"
 
-# Ensure wifi-monitor.sh and optimize_network.sh are executable
+# NAS archive service and timer
+NAS_ARCHIVE_SERVICE="/etc/systemd/system/nas_archive.service"
+configure_service "$TEMPLATES_DIR/nas_archive.service" "$NAS_ARCHIVE_SERVICE"
+
+NAS_ARCHIVE_TIMER="/etc/systemd/system/nas_archive.timer"
+configure_service "$TEMPLATES_DIR/nas_archive.timer" "$NAS_ARCHIVE_TIMER"
+
+# Ensure wifi-monitor.sh, optimize_network.sh, and nas_archive.sh are executable
 chmod +x "$SCRIPT_DIR/scripts/wifi-monitor.sh"
+chmod +x "$SCRIPT_DIR/scripts/nas_archive.sh" 2>/dev/null || true
 chmod +x "$SCRIPT_DIR/scripts/optimize_network.sh" 2>/dev/null || true
 
 # Apply network optimizations immediately during setup
@@ -1451,6 +1459,9 @@ systemctl enable --now wifi-monitor.service || systemctl restart wifi-monitor.se
 
 # Enable network optimizations service (applies runtime settings at each boot)
 systemctl enable network-optimizations.service || true
+
+# Enable NAS archive timer (runs even if nas_archive.enabled is false - script handles early exit)
+systemctl enable --now nas_archive.timer || systemctl restart nas_archive.timer || true
 
 # Ensure the web service picks up the latest code changes
 systemctl restart gadget_web.service || true
