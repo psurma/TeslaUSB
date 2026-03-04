@@ -114,6 +114,22 @@ print(json.dumps(history, indent=2))
 }
 
 # ============================================================================
+# Slack notification helper
+# ============================================================================
+slack_notify() {
+  local message="$1"
+  if [ -z "$NAS_ARCHIVE_SLACK_WEBHOOK" ]; then
+    return 0
+  fi
+  local payload
+  payload="$(printf '{"text": "%s"}' "$(echo "$message" | sed 's/"/\\"/g; s/$/\\n/' | tr -d '\n')")"
+  curl -s -X POST -H 'Content-type: application/json' \
+    --data "$payload" \
+    --max-time 10 \
+    "$NAS_ARCHIVE_SLACK_WEBHOOK" >/dev/null 2>&1 || true
+}
+
+# ============================================================================
 # Cleanup / unmount on exit
 # ============================================================================
 NAS_MOUNTED=false
@@ -231,6 +247,28 @@ log_info "Starting rsync from $TESLACAM_DIR/ to $NAS_MOUNT/..."
 
 RSYNC_OUTPUT="$(mktemp)"
 
+# Dry-run first to count pending files for Slack notification
+PENDING_FILES=0
+DRY_RUN_OUT="$(mktemp)"
+if nsenter --mount=/proc/1/ns/mnt -- rsync -a \
+    --ignore-existing \
+    --no-perms --no-owner --no-group \
+    --omit-dir-times \
+    --dry-run --stats \
+    "$TESLACAM_DIR/" \
+    "$NAS_MOUNT/" \
+    > "$DRY_RUN_OUT" 2>&1; then
+  PENDING_FILES="$(grep -oP 'Number of regular files transferred: \K[0-9,]+' "$DRY_RUN_OUT" | tr -d ',' || echo 0)"
+  PENDING_FILES="${PENDING_FILES:-0}"
+fi
+rm -f "$DRY_RUN_OUT"
+
+log_info "Files pending transfer: $PENDING_FILES"
+
+if [ "$PENDING_FILES" -gt 0 ]; then
+  slack_notify "TeslaUSB: Starting NAS archive — $PENDING_FILES file(s) to sync to //$NAS_ARCHIVE_SMB_HOST/$NAS_ARCHIVE_SMB_SHARE"
+fi
+
 # --ignore-existing: never overwrite files already on NAS (safe for live recording)
 # --no-perms --no-owner --no-group: CIFS doesn't support Unix permissions
 # --omit-dir-times: avoid errors on CIFS directory timestamps
@@ -262,6 +300,10 @@ if nsenter --mount=/proc/1/ns/mnt -- rsync -a \
   write_status "ok" "Sync complete" "$FILES_SYNCED" "" "$BYTES_TRANSFERRED"
   append_history "ok" "$FILES_SYNCED" "$BYTES_TRANSFERRED" "$DURATION" ""
 
+  if [ "$FILES_SYNCED" -gt 0 ]; then
+    slack_notify "TeslaUSB: Archive complete — $FILES_SYNCED file(s) synced (${DURATION}s)"
+  fi
+
 else
   RSYNC_ERROR="$(tail -1 "$RSYNC_OUTPUT" | tr '"' "'" | tr '\n' ' ')"
   DURATION="$(( $(date +%s) - RUN_START ))"
@@ -269,6 +311,7 @@ else
   cat "$RSYNC_OUTPUT" | while IFS= read -r line; do log_info "  $line"; done
   write_status "error" "Rsync failed" 0 "$RSYNC_ERROR" 0
   append_history "error" 0 0 "$DURATION" "$RSYNC_ERROR"
+  slack_notify "TeslaUSB: Archive FAILED — $RSYNC_ERROR"
 fi
 
 rm -f "$RSYNC_OUTPUT"

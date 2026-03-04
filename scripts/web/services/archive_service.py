@@ -49,6 +49,7 @@ def get_nas_config():
             'smb_password': nas.get('smb_password', ''),
             'smb_version': nas.get('smb_version', '2.0'),
             'delete_after_archive': nas.get('delete_after_archive', False),
+            'slack_webhook': nas.get('slack_webhook', ''),
         }
     except Exception as e:
         logger.error("Failed to read NAS config: %s", e)

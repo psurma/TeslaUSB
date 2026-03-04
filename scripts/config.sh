@@ -78,7 +78,8 @@ eval "$(yq -r '
   "NAS_ARCHIVE_SMB_USER=\"" + .nas_archive.smb_user + "\"",
   "NAS_ARCHIVE_SMB_PASSWORD=\"" + .nas_archive.smb_password + "\"",
   "NAS_ARCHIVE_SMB_VERSION=\"" + .nas_archive.smb_version + "\"",
-  "NAS_ARCHIVE_DELETE_AFTER=\"" + (.nas_archive.delete_after_archive | tostring) + "\""
+  "NAS_ARCHIVE_DELETE_AFTER=\"" + (.nas_archive.delete_after_archive | tostring) + "\"",
+  "NAS_ARCHIVE_SLACK_WEBHOOK=\"" + (.nas_archive.slack_webhook // "") + "\""
 ' "$CONFIG_YAML")"
 
 # ============================================================================

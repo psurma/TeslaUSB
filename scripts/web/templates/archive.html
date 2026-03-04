@@ -84,6 +84,17 @@
                 <td>{{ 'Yes' if archive.config.delete_after_archive else 'No' }}</td>
             </tr>
             <tr>
+                <td class="label">Slack Notifications</td>
+                <td>
+                    {% if archive.config.slack_webhook %}
+                    <span class="status-badge status-present">Enabled</span>
+                    {% else %}
+                    <span class="status-badge status-edit">Disabled</span>
+                    &mdash; set <code>nas_archive.slack_webhook</code> in config.yaml
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
                 <td class="label">Last Sync</td>
                 <td id="last-sync-time">{{ archive.last_sync or 'Never' }}</td>
             </tr>

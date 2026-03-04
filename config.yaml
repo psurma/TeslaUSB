@@ -103,3 +103,4 @@ nas_archive:
   smb_password: "" # SMB password (leave empty if using credentials file)
   smb_version: "2.0" # SMB protocol version (2.0 required for Synology + Debian Buster)
   delete_after_archive: false # If true, delete local files after successful sync
+  slack_webhook: "" # Slack Incoming Webhook URL for notifications (leave empty to disable)
