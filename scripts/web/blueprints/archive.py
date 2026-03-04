@@ -3,7 +3,10 @@
 from flask import Blueprint, render_template, jsonify, request
 
 from utils import get_base_context
-from services.archive_service import get_archive_status, trigger_sync, test_nas_connection
+from services.archive_service import (
+    get_archive_status, trigger_sync, test_nas_connection,
+    get_last_log, get_history,
+)
 
 archive_bp = Blueprint('archive', __name__, url_prefix='/archive')
 
@@ -39,3 +42,16 @@ def test_connection():
     """Test NAS connectivity. Returns JSON."""
     result = test_nas_connection()
     return jsonify(result)
+
+
+@archive_bp.route("/log")
+def last_log():
+    """Return the last rsync log as plain text."""
+    log = get_last_log()
+    return jsonify(log)
+
+
+@archive_bp.route("/history")
+def history():
+    """Return archive run history as JSON."""
+    return jsonify(get_history())

@@ -27,8 +27,13 @@ NAS_MOUNT="/mnt/nas_archive"
 STATUS_DIR="/run/teslausb"
 STATUS_FILE="$STATUS_DIR/nas_archive_status.json"
 STATUS_TMP="$STATUS_DIR/nas_archive_status.tmp"
+LOGS_DIR="$GADGET_DIR/logs"
+LOG_FILE="$LOGS_DIR/nas_archive_last.log"
+HISTORY_FILE="$LOGS_DIR/nas_archive_history.json"
+HISTORY_MAX=100
 PART1_RO_MOUNT="$MNT_DIR/part1-ro"
 LOG_PREFIX="nas_archive"
+RUN_START="$(date +%s)"
 
 # ============================================================================
 # Logging helpers
@@ -44,6 +49,7 @@ write_status() {
   local message="$2"
   local files_synced="${3:-0}"
   local last_error="${4:-}"
+  local bytes_transferred="${5:-0}"
 
   mkdir -p "$STATUS_DIR"
 
@@ -54,6 +60,7 @@ write_status() {
   "message": "$message",
   "last_sync": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
   "files_synced": $files_synced,
+  "bytes_transferred": $bytes_transferred,
   "last_error": "$last_error"
 }
 EOF
@@ -61,6 +68,49 @@ EOF
   # Atomic rename after fsync
   sync "$STATUS_TMP" 2>/dev/null || true
   mv -f "$STATUS_TMP" "$STATUS_FILE"
+}
+
+# ============================================================================
+# History file helpers
+# ============================================================================
+append_history() {
+  local status="$1"
+  local files_synced="${2:-0}"
+  local bytes_transferred="${3:-0}"
+  local duration="${4:-0}"
+  local error="${5:-}"
+
+  mkdir -p "$LOGS_DIR"
+
+  local entry
+  entry="$(printf '{"timestamp":"%s","status":"%s","files_synced":%s,"bytes_transferred":%s,"duration_seconds":%s,"ssid":"%s","error":"%s"}' \
+    "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+    "$status" \
+    "$files_synced" \
+    "$bytes_transferred" \
+    "$duration" \
+    "${CURRENT_SSID:-}" \
+    "$error")"
+
+  # Read existing history or start fresh
+  local existing="[]"
+  if [ -f "$HISTORY_FILE" ]; then
+    existing="$(cat "$HISTORY_FILE" 2>/dev/null || echo '[]')"
+  fi
+
+  # Prepend new entry, keep last HISTORY_MAX entries, write atomically
+  local tmp="$HISTORY_FILE.tmp"
+  python3 -c "
+import json, sys
+entry = json.loads(sys.argv[1])
+try:
+    history = json.loads(sys.argv[2])
+except:
+    history = []
+history.insert(0, entry)
+history = history[:$HISTORY_MAX]
+print(json.dumps(history, indent=2))
+" "$entry" "$existing" > "$tmp" 2>/dev/null && mv -f "$tmp" "$HISTORY_FILE" || true
 }
 
 # ============================================================================
@@ -81,12 +131,21 @@ cleanup() {
 trap cleanup EXIT
 
 # ============================================================================
+# Setup log file
+# ============================================================================
+mkdir -p "$LOGS_DIR"
+# Truncate log at start of each run
+: > "$LOG_FILE"
+# Redirect all output to log file AND stdout (for journald)
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# ============================================================================
 # Check: NAS archiving enabled
 # ============================================================================
 if [ "$NAS_ARCHIVE_ENABLED" != "true" ]; then
   log_info "NAS archiving is disabled in config. Exiting."
   mkdir -p "$STATUS_DIR"
-  write_status "disabled" "NAS archiving is disabled" 0 ""
+  write_status "disabled" "NAS archiving is disabled" 0 "" 0
   exit 0
 fi
 
@@ -107,7 +166,7 @@ fi
 
 if [ "$CURRENT_SSID" != "$NAS_ARCHIVE_HOME_SSID" ]; then
   log_info "Not on home WiFi (current: '${CURRENT_SSID:-none}', home: '$NAS_ARCHIVE_HOME_SSID'). Skipping."
-  write_status "not_home" "Not connected to home WiFi ('${CURRENT_SSID:-none}')" 0 ""
+  write_status "not_home" "Not connected to home WiFi ('${CURRENT_SSID:-none}')" 0 "" 0
   exit 0
 fi
 
@@ -118,7 +177,7 @@ log_info "On home WiFi '$CURRENT_SSID'. Proceeding with archive check."
 # ============================================================================
 if [ ! -f "$STATE_FILE" ] || [ "$(cat "$STATE_FILE")" != "present" ]; then
   log_info "Not in present mode. Skipping NAS archive."
-  write_status "skipped" "Not in present mode" 0 ""
+  write_status "skipped" "Not in present mode" 0 "" 0
   exit 0
 fi
 
@@ -127,14 +186,14 @@ fi
 # ============================================================================
 if ! nsenter --mount=/proc/1/ns/mnt -- mountpoint -q "$PART1_RO_MOUNT" 2>/dev/null; then
   log_info "Part1-ro not mounted at $PART1_RO_MOUNT. Skipping."
-  write_status "skipped" "TeslaCam drive not mounted" 0 ""
+  write_status "skipped" "TeslaCam drive not mounted" 0 "" 0
   exit 0
 fi
 
 TESLACAM_DIR="$PART1_RO_MOUNT/TeslaCam"
 if [ ! -d "$TESLACAM_DIR" ]; then
   log_info "TeslaCam directory not found at $TESLACAM_DIR. Nothing to sync."
-  write_status "ok" "No TeslaCam footage found" 0 ""
+  write_status "ok" "No TeslaCam footage found" 0 "" 0
   exit 0
 fi
 
@@ -157,7 +216,8 @@ if ! nsenter --mount=/proc/1/ns/mnt -- mount -t cifs \
     "$NAS_MOUNT" \
     -o "$MOUNT_OPTS" 2>/dev/null; then
   log_error "Failed to mount NAS //$NAS_ARCHIVE_SMB_HOST/$NAS_ARCHIVE_SMB_SHARE"
-  write_status "error" "Failed to mount NAS" 0 "CIFS mount failed"
+  write_status "error" "Failed to mount NAS" 0 "CIFS mount failed" 0
+  append_history "error" 0 0 "$(( $(date +%s) - RUN_START ))" "CIFS mount failed"
   exit 0  # Exit 0 so systemd doesn't mark it as failed (network may just be unavailable)
 fi
 
@@ -183,35 +243,32 @@ if nsenter --mount=/proc/1/ns/mnt -- rsync -a \
     "$NAS_MOUNT/" \
     > "$RSYNC_OUTPUT" 2>&1; then
 
-  # Parse number of files transferred from rsync --stats output
-  FILES_SYNCED="$(grep -oP 'Number of regular files transferred: \K[0-9]+' "$RSYNC_OUTPUT" || echo 0)"
+  # Parse stats from rsync --stats output
+  FILES_SYNCED="$(grep -oP 'Number of regular files transferred: \K[0-9,]+' "$RSYNC_OUTPUT" | tr -d ',' || echo 0)"
   FILES_SYNCED="${FILES_SYNCED:-0}"
+  BYTES_TRANSFERRED="$(grep -oP 'Total transferred file size: \K[0-9,]+' "$RSYNC_OUTPUT" | tr -d ',' || echo 0)"
+  BYTES_TRANSFERRED="${BYTES_TRANSFERRED:-0}"
 
-  log_info "Rsync complete. Files transferred: $FILES_SYNCED"
-  cat "$RSYNC_OUTPUT" | while IFS= read -r line; do log_info "  rsync: $line"; done
+  DURATION="$(( $(date +%s) - RUN_START ))"
+
+  log_info "Rsync complete. Files transferred: $FILES_SYNCED, Bytes: $BYTES_TRANSFERRED, Duration: ${DURATION}s"
+  cat "$RSYNC_OUTPUT" | while IFS= read -r line; do log_info "  $line"; done
 
   # Optionally delete local files after successful archive
   if [ "$NAS_ARCHIVE_DELETE_AFTER" = "true" ] && [ "$FILES_SYNCED" -gt 0 ]; then
-    log_info "delete_after_archive enabled. Removing synced files from local drive..."
-    # Only delete files that exist on NAS (use rsync --existing to list them)
-    # For safety, we only delete the TeslaCam subfolder contents, not the root
-    nsenter --mount=/proc/1/ns/mnt -- rsync -a \
-      --existing \
-      --ignore-non-existing \
-      --delete \
-      --no-perms --no-owner --no-group \
-      "$NAS_MOUNT/" \
-      "$TESLACAM_DIR/" \
-      --dry-run 2>/dev/null || true
-    log_info "Note: delete_after_archive requires the drive to be in edit mode for writes. Skipping delete."
+    log_info "delete_after_archive enabled — requires edit mode for writes. Skipping delete."
   fi
 
-  write_status "ok" "Sync complete" "$FILES_SYNCED" ""
+  write_status "ok" "Sync complete" "$FILES_SYNCED" "" "$BYTES_TRANSFERRED"
+  append_history "ok" "$FILES_SYNCED" "$BYTES_TRANSFERRED" "$DURATION" ""
 
 else
   RSYNC_ERROR="$(tail -1 "$RSYNC_OUTPUT" | tr '"' "'" | tr '\n' ' ')"
+  DURATION="$(( $(date +%s) - RUN_START ))"
   log_error "Rsync failed: $RSYNC_ERROR"
-  write_status "error" "Rsync failed" 0 "$RSYNC_ERROR"
+  cat "$RSYNC_OUTPUT" | while IFS= read -r line; do log_info "  $line"; done
+  write_status "error" "Rsync failed" 0 "$RSYNC_ERROR" 0
+  append_history "error" 0 0 "$DURATION" "$RSYNC_ERROR"
 fi
 
 rm -f "$RSYNC_OUTPUT"

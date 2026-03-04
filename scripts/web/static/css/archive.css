@@ -159,6 +159,118 @@
     color: #58a6ff;
 }
 
+/* Log output */
+.log-output {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 0.82em;
+    line-height: 1.5;
+    max-height: 320px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* History table */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88em;
+}
+
+.history-table th {
+    text-align: left;
+    padding: 7px 10px;
+    border-bottom: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.history-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    vertical-align: top;
+}
+
+.history-table tr:last-child td {
+    border-bottom: none;
+}
+
+.history-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.history-status.status-ok {
+    background: #E8F5E9;
+    color: #2E7D32;
+}
+
+.history-status.status-error {
+    background: #FFEBEE;
+    color: #C62828;
+}
+
+.history-status.status-skip {
+    background: #F5F5F5;
+    color: #616161;
+}
+
+.history-error {
+    color: #C62828;
+    font-size: 0.85em;
+    max-width: 220px;
+    word-break: break-word;
+}
+
+.text-muted {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+/* Small button variant for card headers */
+.btn-small {
+    padding: 4px 10px;
+    font-size: 0.82em;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+[data-theme="dark"] .log-output {
+    background: #161b22;
+    border-color: var(--border-color);
+    color: #c9d1d9;
+}
+
+[data-theme="dark"] .history-status.status-ok {
+    background: #1a4d2e;
+    color: #3fb950;
+}
+
+[data-theme="dark"] .history-status.status-error {
+    background: #4d1a1a;
+    color: #ff6b6b;
+}
+
+[data-theme="dark"] .history-status.status-skip {
+    background: #2d2d2d;
+    color: #8b949e;
+}
+
+[data-theme="dark"] .history-error {
+    color: #ff6b6b;
+}
+
 /* Btn classes (duplicated from cleanup.css for self-contained use) */
 .btn {
     display: inline-flex;

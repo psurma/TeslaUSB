@@ -16,16 +16,28 @@ logger = logging.getLogger(__name__)
 STATUS_FILE = "/run/teslausb/nas_archive_status.json"
 
 
+def _repo_root():
+    """Return the repo root directory (two levels above services/)."""
+    services_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.dirname(os.path.dirname(services_dir)))
+
+
+def _logs_dir():
+    """Return the persistent logs directory."""
+    try:
+        from config import GADGET_DIR
+        return os.path.join(GADGET_DIR, 'logs')
+    except Exception:
+        return os.path.join(_repo_root(), 'logs')
+
+
 def get_nas_config():
     """Read NAS archive config from config.yaml."""
     try:
         import yaml
         import os as _os
-        # Resolve config.yaml: services/ -> web/ -> scripts/ -> repo root
-        _services_dir = _os.path.dirname(_os.path.abspath(__file__))
-        _repo_root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_services_dir)))
-        _config_yaml = _os.path.join(_repo_root, 'config.yaml')
-        with open(_config_yaml, 'r') as f:
+        config_yaml = _os.path.join(_repo_root(), 'config.yaml')
+        with open(config_yaml, 'r') as f:
             cfg = yaml.safe_load(f)
         nas = cfg.get('nas_archive', {})
         return {
@@ -48,7 +60,7 @@ def get_archive_status():
     Read the latest archive status from the status file written by nas_archive.sh.
 
     Returns a dict with keys:
-      enabled, status, message, last_sync, files_synced, last_error
+      enabled, status, message, last_sync, files_synced, bytes_transferred, last_error, config
     """
     config = get_nas_config()
 
@@ -58,6 +70,7 @@ def get_archive_status():
         'message': 'No archive run yet',
         'last_sync': None,
         'files_synced': 0,
+        'bytes_transferred': 0,
         'last_error': '',
         'config': config,
     }
@@ -68,13 +81,49 @@ def get_archive_status():
     try:
         with open(STATUS_FILE, 'r') as f:
             data = json.load(f)
-        # Merge with latest config (in case config changed since last run)
         data['enabled'] = config.get('enabled', False)
+        data.setdefault('bytes_transferred', 0)
         data['config'] = config
         return data
     except Exception as e:
         logger.warning("Failed to read archive status file: %s", e)
         return default
+
+
+def get_last_log():
+    """
+    Read the last rsync log file.
+
+    Returns a dict with 'content' (str) and 'path' (str).
+    """
+    log_file = os.path.join(_logs_dir(), 'nas_archive_last.log')
+    if not os.path.exists(log_file):
+        return {'content': None, 'path': log_file}
+    try:
+        with open(log_file, 'r', errors='replace') as f:
+            content = f.read()
+        return {'content': content, 'path': log_file}
+    except Exception as e:
+        logger.warning("Failed to read archive log: %s", e)
+        return {'content': None, 'path': log_file, 'error': str(e)}
+
+
+def get_history():
+    """
+    Read the archive run history.
+
+    Returns a list of dicts, newest first:
+      timestamp, status, files_synced, bytes_transferred, duration_seconds, ssid, error
+    """
+    history_file = os.path.join(_logs_dir(), 'nas_archive_history.json')
+    if not os.path.exists(history_file):
+        return []
+    try:
+        with open(history_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning("Failed to read archive history: %s", e)
+        return []
 
 
 def trigger_sync():
@@ -154,7 +203,6 @@ def test_nas_connection():
             )
 
             if result.returncode == 0:
-                # Unmount immediately
                 subprocess.run(
                     ['nsenter', '--mount=/proc/1/ns/mnt', '--',
                      'umount', test_mount],

@@ -116,6 +116,40 @@
     </div>
     {% endif %}
 
+    <!-- Last Sync Log -->
+    <div class="settings-card">
+        <h3>Last Sync Log
+            <button class="btn btn-secondary btn-small" onclick="loadLog()" id="log-refresh-btn">Refresh</button>
+        </h3>
+        <div id="log-container">
+            <pre id="log-output" class="log-output">Loading...</pre>
+        </div>
+    </div>
+
+    <!-- Archive History -->
+    <div class="settings-card">
+        <h3>Sync History
+            <button class="btn btn-secondary btn-small" onclick="loadHistory()" id="history-refresh-btn">Refresh</button>
+        </h3>
+        <div id="history-container">
+            <p class="text-muted" id="history-loading">Loading...</p>
+            <table class="history-table" id="history-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>Files</th>
+                        <th>Size</th>
+                        <th>Duration</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body"></tbody>
+            </table>
+            <p class="text-muted" id="history-empty" style="display:none;">No history yet.</p>
+        </div>
+    </div>
+
     <!-- Timer Info -->
     <div class="settings-card">
         <h3>Schedule</h3>
@@ -137,6 +171,89 @@
 </div>
 
 <script>
+function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    let val = bytes;
+    while (val >= 1024 && i < units.length - 1) { val /= 1024; i++; }
+    return val.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+}
+
+function formatDuration(secs) {
+    if (!secs) return '—';
+    if (secs < 60) return secs + 's';
+    return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+}
+
+function formatTimestamp(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleString();
+    } catch (e) {
+        return iso;
+    }
+}
+
+function loadLog() {
+    const btn = document.getElementById('log-refresh-btn');
+    const pre = document.getElementById('log-output');
+    btn.disabled = true;
+    fetch('/archive/log')
+        .then(r => r.json())
+        .then(data => {
+            if (data.content === null) {
+                pre.textContent = '(no log file found)';
+            } else {
+                pre.textContent = data.content || '(empty log)';
+                pre.scrollTop = pre.scrollHeight;
+            }
+        })
+        .catch(err => { pre.textContent = 'Error loading log: ' + err; })
+        .finally(() => { btn.disabled = false; });
+}
+
+function loadHistory() {
+    const btn = document.getElementById('history-refresh-btn');
+    const tbody = document.getElementById('history-body');
+    const table = document.getElementById('history-table');
+    const empty = document.getElementById('history-empty');
+    const loading = document.getElementById('history-loading');
+    btn.disabled = true;
+    fetch('/archive/history')
+        .then(r => r.json())
+        .then(rows => {
+            loading.style.display = 'none';
+            if (!rows || rows.length === 0) {
+                table.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+            tbody.innerHTML = '';
+            rows.forEach(row => {
+                const tr = document.createElement('tr');
+                const statusClass = row.status === 'ok' ? 'status-ok' : (row.status === 'error' ? 'status-error' : 'status-skip');
+                tr.innerHTML = `
+                    <td>${formatTimestamp(row.timestamp)}</td>
+                    <td><span class="history-status ${statusClass}">${row.status}</span></td>
+                    <td>${row.files_synced || 0}</td>
+                    <td>${formatBytes(row.bytes_transferred)}</td>
+                    <td>${formatDuration(row.duration_seconds)}</td>
+                    <td class="history-error">${row.error || ''}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            table.style.display = 'table';
+            empty.style.display = 'none';
+        })
+        .catch(err => { loading.textContent = 'Error loading history: ' + err; })
+        .finally(() => { btn.disabled = false; });
+}
+
+// Load log and history on page load
+loadLog();
+loadHistory();
+
 function triggerSync() {
     const btn = document.getElementById('sync-btn');
     const result = document.getElementById('action-result');
