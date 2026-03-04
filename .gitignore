@@ -1,2 +1,14 @@
 # Playwright MCP browser automation folder
 .playwright-mcp/
+
+# Runtime / generated files (Pi-specific, not source)
+state.txt
+*.img
+logs/
+fsck_history.json
+fsck_status.json
+config.yaml.bak
+
+# Python cache
+**/__pycache__/
+**/*.pyc
