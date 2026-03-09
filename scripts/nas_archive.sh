@@ -272,14 +272,18 @@ fi
 # --ignore-existing: never overwrite files already on NAS (safe for live recording)
 # --no-perms --no-owner --no-group: CIFS doesn't support Unix permissions
 # --omit-dir-times: avoid errors on CIFS directory timestamps
-if nsenter --mount=/proc/1/ns/mnt -- rsync -a \
+nsenter --mount=/proc/1/ns/mnt -- rsync -a \
     --ignore-existing \
     --no-perms --no-owner --no-group \
     --omit-dir-times \
     --stats \
     "$TESLACAM_DIR/" \
     "$NAS_MOUNT/" \
-    > "$RSYNC_OUTPUT" 2>&1; then
+    > "$RSYNC_OUTPUT" 2>&1
+RSYNC_EXIT=$?
+# Exit code 24 = files vanished during transfer (normal with live TeslaCam recording)
+[ "$RSYNC_EXIT" -eq 24 ] && RSYNC_EXIT=0
+if [ "$RSYNC_EXIT" -eq 0 ]; then
 
   # Parse stats from rsync --stats output
   FILES_SYNCED="$(grep -oP 'Number of regular files transferred: \K[0-9,]+' "$RSYNC_OUTPUT" | tr -d ',' || echo 0)"
@@ -305,7 +309,7 @@ if nsenter --mount=/proc/1/ns/mnt -- rsync -a \
   fi
 
 else
-  RSYNC_ERROR="$(tail -1 "$RSYNC_OUTPUT" | tr '"' "'" | tr '\n' ' ')"
+  RSYNC_ERROR="$(grep -v '^$' "$RSYNC_OUTPUT" | tail -1 | tr '"' "'" | tr '\n' ' ') (code $RSYNC_EXIT)"
   DURATION="$(( $(date +%s) - RUN_START ))"
   log_error "Rsync failed: $RSYNC_ERROR"
   cat "$RSYNC_OUTPUT" | while IFS= read -r line; do log_info "  $line"; done
