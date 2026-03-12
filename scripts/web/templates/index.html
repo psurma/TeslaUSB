@@ -60,7 +60,8 @@
                     </div>
                     <div style="margin-bottom: 8px;">
                         <label for="ap_passphrase" style="display: inline-block; width: 100px; color: var(--text-primary);">Password:</label>
-                        <input type="password" id="ap_passphrase" name="passphrase" value="{{ ap_config.passphrase }}" minlength="8" maxlength="63"
+                        <input type="password" id="ap_passphrase" name="passphrase" minlength="8" maxlength="63"
+                               placeholder="{{ '(set — leave blank to keep)' if ap_config.passphrase_set else '(none — enter to set)' }}"
                                style="width: 200px; padding: 4px; background-color: var(--form-input-bg); color: var(--text-primary); border: 1px solid var(--border-input); border-radius: 3px;">
                         <button type="button" onclick="togglePassword(this)" style="padding: 4px 8px; margin-left: 4px; background-color: var(--btn-info-bg); color: var(--btn-info-text); border: none; border-radius: 3px; cursor: pointer;">Show</button>
                         <span style="font-size: 0.85em; color: var(--text-secondary);">(8-63 chars)</span>

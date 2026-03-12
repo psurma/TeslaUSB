@@ -11,32 +11,24 @@ import os
 import subprocess
 import tempfile
 
+import yaml
+
+from config import GADGET_DIR
+
 logger = logging.getLogger(__name__)
 
 STATUS_FILE = "/run/teslausb/nas_archive_status.json"
 
 
-def _repo_root():
-    """Return the repo root directory (two levels above services/)."""
-    services_dir = os.path.dirname(os.path.abspath(__file__))
-    return os.path.dirname(os.path.dirname(os.path.dirname(services_dir)))
-
-
 def _logs_dir():
     """Return the persistent logs directory."""
-    try:
-        from config import GADGET_DIR
-        return os.path.join(GADGET_DIR, 'logs')
-    except Exception:
-        return os.path.join(_repo_root(), 'logs')
+    return os.path.join(GADGET_DIR, 'logs')
 
 
 def get_nas_config():
     """Read NAS archive config from config.yaml."""
     try:
-        import yaml
-        import os as _os
-        config_yaml = _os.path.join(_repo_root(), 'config.yaml')
+        config_yaml = os.path.join(GADGET_DIR, 'config.yaml')
         with open(config_yaml, 'r') as f:
             cfg = yaml.safe_load(f)
         nas = cfg.get('nas_archive', {})
@@ -134,7 +126,6 @@ def trigger_sync():
     Returns a dict with 'started' boolean and optional 'error' string.
     """
     try:
-        from config import GADGET_DIR
         script = os.path.join(GADGET_DIR, 'scripts', 'nas_archive.sh')
 
         if not os.path.exists(script):
@@ -185,12 +176,14 @@ def test_nas_connection():
         version = config.get('smb_version', '2.0')
 
         test_mount = tempfile.mkdtemp(prefix='teslausb_nas_test_')
+        creds_fd, creds_path = tempfile.mkstemp(prefix='teslausb_cifs_', dir='/run/teslausb')
 
         try:
-            mount_opts = f'vers={version},username={user}'
-            if password:
-                mount_opts += f',password={password}'
-            mount_opts += ',noserverino'
+            os.chmod(creds_path, 0o600)
+            with os.fdopen(creds_fd, 'w') as cf:
+                cf.write(f'username={user}\npassword={password}\n')
+
+            mount_opts = f'vers={version},credentials={creds_path},noserverino'
 
             result = subprocess.run(
                 ['nsenter', '--mount=/proc/1/ns/mnt', '--',
@@ -216,6 +209,10 @@ def test_nas_connection():
                 err = result.stderr.strip() or result.stdout.strip()
                 return {'reachable': False, 'error': err}
         finally:
+            try:
+                os.unlink(creds_path)
+            except OSError:
+                pass
             try:
                 os.rmdir(test_mount)
             except OSError:

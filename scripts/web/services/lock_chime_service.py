@@ -1287,6 +1287,10 @@ def rename_chime_file(old_filename, new_filename):
     from services.partition_mount_service import quick_edit_part2
     from config import CHIMES_FOLDER
 
+    # Sanitise to bare filenames — prevent path traversal
+    old_filename = os.path.basename(old_filename)
+    new_filename = os.path.basename(new_filename)
+
     # Validate filenames
     if not old_filename or not new_filename:
         return {"success": False, "error": "Both old and new filenames are required"}

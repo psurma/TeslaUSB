@@ -142,6 +142,10 @@ cleanup() {
       log_error "Failed to unmount NAS (may already be unmounted)"
     NAS_MOUNTED=false
   fi
+  # Remove credentials file if it was created
+  if [ -n "${CREDS_FILE:-}" ] && [ -f "$CREDS_FILE" ]; then
+    rm -f "$CREDS_FILE"
+  fi
 }
 
 trap cleanup EXIT
@@ -220,12 +224,14 @@ log_info "Mounting NAS //$NAS_ARCHIVE_SMB_HOST/$NAS_ARCHIVE_SMB_SHARE..."
 
 nsenter --mount=/proc/1/ns/mnt -- mkdir -p "$NAS_MOUNT"
 
-MOUNT_OPTS="vers=$NAS_ARCHIVE_SMB_VERSION,username=$NAS_ARCHIVE_SMB_USER"
-if [ -n "$NAS_ARCHIVE_SMB_PASSWORD" ]; then
-  MOUNT_OPTS="$MOUNT_OPTS,password=$NAS_ARCHIVE_SMB_PASSWORD"
-fi
+# Write credentials to a temporary file (mode 600) to avoid exposing password
+# in process arguments or /proc/mounts
+CREDS_FILE="$(mktemp /run/teslausb/cifs_creds.XXXXXX)"
+chmod 600 "$CREDS_FILE"
+printf 'username=%s\npassword=%s\n' "$NAS_ARCHIVE_SMB_USER" "$NAS_ARCHIVE_SMB_PASSWORD" > "$CREDS_FILE"
+
 # Use noserverino to avoid inode conflicts on Synology
-MOUNT_OPTS="$MOUNT_OPTS,noserverino,file_mode=0644,dir_mode=0755"
+MOUNT_OPTS="vers=$NAS_ARCHIVE_SMB_VERSION,credentials=$CREDS_FILE,noserverino,file_mode=0644,dir_mode=0755"
 
 if ! nsenter --mount=/proc/1/ns/mnt -- mount -t cifs \
     "//$NAS_ARCHIVE_SMB_HOST/$NAS_ARCHIVE_SMB_SHARE" \

@@ -116,16 +116,8 @@ def preview():
     # Get TeslaCam partition path
     partition_path = Path(get_mount_path('part1'))
 
-    # DEBUG: Print loaded policies
-    print(f"DEBUG: Loaded policies: {cleanup_service.get_policies()}")
-    print(f"DEBUG: Partition path: {partition_path}")
-
     # Calculate cleanup plan
     cleanup_plan = cleanup_service.calculate_cleanup_plan(partition_path)
-
-    # DEBUG: Print cleanup plan
-    print(f"DEBUG: Cleanup plan: total_count={cleanup_plan.get('total_count', 0)}, total_size={cleanup_plan.get('total_size', 0)}")
-    print(f"DEBUG: Breakdown: {cleanup_plan.get('breakdown_by_folder', {})}")
 
     # Get current partition usage for impact preview
     partition_usage = get_partition_usage()

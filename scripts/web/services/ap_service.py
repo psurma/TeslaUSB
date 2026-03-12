@@ -75,9 +75,9 @@ def get_ap_config():
         ssid = config.get("offline_ap", {}).get("ssid", "TeslaUSB")
         passphrase = config.get("offline_ap", {}).get("passphrase", "")
 
-        return {"ssid": ssid, "passphrase": passphrase}
+        return {"ssid": ssid, "passphrase_set": bool(passphrase)}
     except Exception:
-        return {"ssid": "TeslaUSB", "passphrase": ""}
+        return {"ssid": "TeslaUSB", "passphrase_set": False}
 
 
 def update_ap_config(ssid: str, passphrase: str):
@@ -100,7 +100,9 @@ def update_ap_config(ssid: str, passphrase: str):
         config["offline_ap"] = {}
 
     config["offline_ap"]["ssid"] = ssid
-    config["offline_ap"]["passphrase"] = passphrase
+    # If passphrase is blank, keep the existing value (blank = "don't change")
+    if passphrase:
+        config["offline_ap"]["passphrase"] = passphrase
 
     # Write config to temporary file first (atomic write)
     temp_file = CONFIG_YAML + ".tmp"
