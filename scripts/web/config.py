@@ -59,7 +59,17 @@ SECRET_KEY = config['web']['secret_key']
 # Auto-generate a secret key on first run if still using default
 if SECRET_KEY == _DEFAULT_SECRET:
     SECRET_KEY = secrets.token_hex(32)
-    print(f"Generated new SECRET_KEY. Consider saving it to config.yaml for persistence.")
+    try:
+        config['web']['secret_key'] = SECRET_KEY
+        import tempfile
+        tmp = CONFIG_YAML + '.tmp'
+        with open(tmp, 'w') as _f:
+            yaml.dump(config, _f, default_flow_style=False, sort_keys=False)
+        os.replace(tmp, CONFIG_YAML)
+    except Exception:
+        pass  # Non-fatal: key will regenerate next restart
+
+WEB_PIN = config['web'].get('pin', '')
 
 # Lock Chime Configuration
 LOCK_CHIME_FILENAME = config['web']['lock_chime_filename']

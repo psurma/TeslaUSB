@@ -151,15 +151,11 @@ def edit_usb():
 def status():
     """Simple status endpoint for health checks."""
     ctx = get_base_context()
-    ap = ap_status()
     return {
         "status": "running",
-        "gadget_dir": GADGET_DIR,
         "mode": ctx['mode_token'],
         "mode_label": ctx['mode_label'],
         "mode_class": ctx['mode_class'],
-        "share_paths": ctx['share_paths'],
-        "ap": ap,
     }
 
 

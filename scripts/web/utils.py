@@ -61,6 +61,23 @@ def parse_session_from_filename(filename):
     return None
 
 
+def make_image_guard(image_path):
+    """
+    Return a before_request guard function that blocks access when a disk image is missing.
+
+    Usage:
+        blueprint.before_request(make_image_guard(IMG_CAM_PATH))
+    """
+    def _guard():
+        if not os.path.isfile(image_path):
+            from flask import request, jsonify, flash, redirect, url_for
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"error": "Feature unavailable"}), 503
+            flash("This feature is not available because the required disk image has not been created.")
+            return redirect(url_for('mode_control.index'))
+    return _guard
+
+
 def generate_thumbnail_hash(video_path):
     """Generate a unique hash for a video file based on path and modification time."""
     try:

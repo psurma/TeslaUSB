@@ -44,6 +44,16 @@ from utils import parse_session_from_filename
 MP4_FTYP_SIGNATURE = b'ftyp'
 
 
+def _assign_camera_video(name_lower, entry_name, camera_videos):
+    """Assign a video file to its camera slot. Returns the slot name, or None if no match."""
+    from config import CAMERA_ANGLES
+    for cam in CAMERA_ANGLES:
+        if cam in name_lower and camera_videos.get(cam) is None:
+            camera_videos[cam] = entry_name
+            return cam
+    return None
+
+
 def is_valid_mp4(filepath):
     """
     Check if a file has valid MP4 headers (not encrypted by Tesla).
@@ -237,18 +247,7 @@ def _parse_event_folder_lightweight(event_path, event_name):
 
                         # Categorize video by camera angle (first found only)
                         name_lower = entry.name.lower()
-                        if 'front' in name_lower and camera_videos['front'] is None:
-                            camera_videos['front'] = entry.name
-                        elif 'back' in name_lower and camera_videos['back'] is None:
-                            camera_videos['back'] = entry.name
-                        elif 'left_repeater' in name_lower and camera_videos['left_repeater'] is None:
-                            camera_videos['left_repeater'] = entry.name
-                        elif 'right_repeater' in name_lower and camera_videos['right_repeater'] is None:
-                            camera_videos['right_repeater'] = entry.name
-                        elif 'left_pillar' in name_lower and camera_videos['left_pillar'] is None:
-                            camera_videos['left_pillar'] = entry.name
-                        elif 'right_pillar' in name_lower and camera_videos['right_pillar'] is None:
-                            camera_videos['right_pillar'] = entry.name
+                        _assign_camera_video(name_lower, entry.name, camera_videos)
                     except OSError:
                         continue
 
@@ -397,24 +396,8 @@ def _parse_event_folder(event_path, event_name):
                         camera_key = None
                         if name_lower == 'event.mp4':
                             camera_videos['event'] = entry.name
-                        elif 'front' in name_lower and camera_videos['front'] is None:
-                            camera_videos['front'] = entry.name
-                            camera_key = 'front'
-                        elif 'back' in name_lower and camera_videos['back'] is None:
-                            camera_videos['back'] = entry.name
-                            camera_key = 'back'
-                        elif 'left_repeater' in name_lower and camera_videos['left_repeater'] is None:
-                            camera_videos['left_repeater'] = entry.name
-                            camera_key = 'left_repeater'
-                        elif 'right_repeater' in name_lower and camera_videos['right_repeater'] is None:
-                            camera_videos['right_repeater'] = entry.name
-                            camera_key = 'right_repeater'
-                        elif 'left_pillar' in name_lower and camera_videos['left_pillar'] is None:
-                            camera_videos['left_pillar'] = entry.name
-                            camera_key = 'left_pillar'
-                        elif 'right_pillar' in name_lower and camera_videos['right_pillar'] is None:
-                            camera_videos['right_pillar'] = entry.name
-                            camera_key = 'right_pillar'
+                        else:
+                            camera_key = _assign_camera_video(name_lower, entry.name, camera_videos)
 
                         # Check if video has valid MP4 headers
                         if camera_key and not is_valid_mp4(entry.path):

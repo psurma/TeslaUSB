@@ -1,5 +1,6 @@
 """Flask blueprints for organizing routes."""
 
+from .auth import auth_bp
 from .mode_control import mode_control_bp
 from .videos import videos_bp
 from .lock_chimes import lock_chimes_bp
@@ -14,6 +15,7 @@ from .captive_portal import captive_portal_bp, catch_all_redirect
 from .archive import archive_bp
 
 __all__ = [
+    'auth_bp',
     'mode_control_bp',
     'videos_bp',
     'lock_chimes_bp',

@@ -41,7 +41,7 @@ setup:
 # Network & Security
 # ============================================================================
 network:
-  samba_password: tesla # Samba password for authenticated user (CHANGE THIS!)
+  samba_password: "" # REQUIRED: set before use
   web_port: 80 # Web interface port (80 required for captive portal - do not change)
 
 # ============================================================================
@@ -52,7 +52,7 @@ offline_ap:
   enabled: true # Set to false to disable fallback AP
   interface: wlan0 # WiFi interface used for AP/STA
   ssid: TeslaUSB # SSID broadcast when AP is active (CHANGE THIS!)
-  passphrase: teslausb1234 # WPA2 passphrase 8-63 chars (CHANGE THIS!)
+  passphrase: "" # REQUIRED: set before use (min 8 chars)
   channel: 6 # 2.4GHz channel (1-11)
   ipv4_cidr: 192.168.4.1/24 # Static IP for AP interface
   dhcp_start: 192.168.4.10 # DHCP range start
@@ -78,6 +78,7 @@ system:
 # ============================================================================
 web:
   secret_key: CHANGE-THIS-TO-A-RANDOM-SECRET-KEY-ON-FIRST-INSTALL # Flask secret key (auto-generated if default)
+  pin: "" # Set a PIN to require authentication for the web UI (leave empty to disable)
   max_lock_chime_size: 1048576 # 1 MiB (1024 * 1024 bytes)
   max_lock_chime_duration: 10.0 # 10 seconds (configurable per Tesla model)
   min_lock_chime_duration: 0.3 # 300ms minimum

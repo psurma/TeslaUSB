@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container" style="max-width: 360px; margin-top: 60px;">
+    <h2 style="text-align: center; margin-bottom: 24px;">TeslaUSB</h2>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div style="padding: 10px 16px; margin-bottom: 16px; border-radius: 6px; background: #FFEBEE; border-left: 4px solid #F44336; color: #C62828;">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endwith %}
+    <form method="post" style="background: var(--bg-container); border: 2px solid var(--border-color); border-radius: 12px; padding: 28px;">
+        <label for="pin" style="display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 0.9em;">Enter PIN</label>
+        <input type="password" id="pin" name="pin" autofocus autocomplete="current-password"
+               inputmode="numeric" maxlength="32"
+               style="width: 100%; padding: 10px; font-size: 1.2em; text-align: center; letter-spacing: 0.3em;
+                      background: var(--form-input-bg); color: var(--text-primary);
+                      border: 1px solid var(--border-input); border-radius: 6px; box-sizing: border-box;">
+        <button type="submit"
+                style="width: 100%; margin-top: 16px; padding: 12px; background: #4CAF50; color: white;
+                       border: none; border-radius: 8px; font-size: 1em; cursor: pointer;">
+            Unlock
+        </button>
+    </form>
+</div>
+{% endblock %}

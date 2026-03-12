@@ -53,17 +53,19 @@ write_status() {
 
   mkdir -p "$STATUS_DIR"
 
-  cat > "$STATUS_TMP" <<EOF
-{
-  "enabled": $NAS_ARCHIVE_ENABLED,
-  "status": "$status",
-  "message": "$message",
-  "last_sync": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
-  "files_synced": $files_synced,
-  "bytes_transferred": $bytes_transferred,
-  "last_error": "$last_error"
+  python3 -c "
+import json, sys, datetime
+data = {
+    'enabled': sys.argv[1] == 'true',
+    'status': sys.argv[2],
+    'message': sys.argv[3],
+    'last_sync': datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ'),
+    'files_synced': int(sys.argv[4] or 0),
+    'bytes_transferred': int(sys.argv[5] or 0),
+    'last_error': sys.argv[6],
 }
-EOF
+sys.stdout.write(json.dumps(data))
+" "$NAS_ARCHIVE_ENABLED" "$status" "$message" "$files_synced" "$bytes_transferred" "$last_error" > "$STATUS_TMP"
 
   # Atomic rename after fsync
   sync "$STATUS_TMP" 2>/dev/null || true

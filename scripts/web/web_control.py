@@ -6,15 +6,32 @@ A Flask web application for controlling USB gadget modes.
 Organized using blueprints for better maintainability.
 """
 
-from flask import Flask
+from flask import Flask, request, session
 import os
 
 # Import configuration
-from config import SECRET_KEY, WEB_PORT, GADGET_DIR, MAX_UPLOAD_SIZE_MB, MAX_UPLOAD_CHUNK_MB
+from config import SECRET_KEY, WEB_PORT, GADGET_DIR, MAX_UPLOAD_SIZE_MB, MAX_UPLOAD_CHUNK_MB, WEB_PIN
 
 # Flask app initialization
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+
+
+@app.before_request
+def require_auth():
+    """Require PIN auth when a PIN is configured."""
+    if not WEB_PIN:
+        return
+    exempt_endpoints = {
+        'auth.login', 'auth.logout', 'static',
+        'captive_portal.detect', 'captive_portal.generate_204',
+        'captive_portal.hotspot_detect', 'captive_portal.index',
+    }
+    if request.endpoint in exempt_endpoints:
+        return
+    if not session.get('authenticated'):
+        from flask import redirect, url_for
+        return redirect(url_for('auth.login', next=request.path))
 
 # Upload limits (protect RAM-constrained devices)
 app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_SIZE_MB * 1024 * 1024
@@ -26,6 +43,7 @@ app.config['TEMPLATES_AUTO_RELOAD'] = False  # Disable template watching - saves
 
 # Register blueprints
 from blueprints import (
+    auth_bp,
     mode_control_bp,
     videos_bp,
     lock_chimes_bp,
@@ -41,6 +59,7 @@ from blueprints import (
     archive_bp,
 )
 
+app.register_blueprint(auth_bp)
 app.register_blueprint(mode_control_bp)
 app.register_blueprint(videos_bp)
 app.register_blueprint(lock_chimes_bp)

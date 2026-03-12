@@ -10,7 +10,7 @@ from config import (GADGET_DIR, LOCK_CHIME_FILENAME, CHIMES_FOLDER, MAX_LOCK_CHI
                     MAX_LOCK_CHIME_DURATION, MIN_LOCK_CHIME_DURATION,
                     SPEED_RANGE_MIN, SPEED_RANGE_MAX, SPEED_STEP,
                     IMG_LIGHTSHOW_PATH)
-from utils import format_file_size, get_base_context
+from utils import format_file_size, get_base_context, make_image_guard
 from services.mode_service import current_mode
 from services.partition_service import get_mount_path
 from services.partition_mount_service import check_operation_in_progress
@@ -29,15 +29,7 @@ from services.chime_group_service import get_group_manager
 
 lock_chimes_bp = Blueprint('lock_chimes', __name__, url_prefix='/lock_chimes')
 logger = logging.getLogger(__name__)
-
-
-@lock_chimes_bp.before_request
-def _require_lightshow_image():
-    if not os.path.isfile(IMG_LIGHTSHOW_PATH):
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return jsonify({"error": "Feature unavailable"}), 503
-        flash("This feature is not available because the required disk image has not been created.")
-        return redirect(url_for('mode_control.index'))
+lock_chimes_bp.before_request(make_image_guard(IMG_LIGHTSHOW_PATH))
 
 # Volume preset mapping (LUFS values to friendly names)
 VOLUME_PRESETS = {
@@ -299,8 +291,6 @@ def upload_lock_chime():
 
     # Use the appropriate service function based on whether file is pre-trimmed
     if pre_trimmed:
-        # Import the save_pretrimmed_wav function
-        from services.lock_chime_service import save_pretrimmed_wav
         success, message = save_pretrimmed_wav(file, filename, part2_mount, normalize, target_lufs)
     else:
         # Use standard upload (converts and re-encodes)
